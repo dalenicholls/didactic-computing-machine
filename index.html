@@ -3,28 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <title>Bookmark Manager</title>
+
 <style>
 body {
   font-family: Arial, sans-serif;
   margin: 0;
-  background: #f5f5f5;
+  background: #f4f4f4;
 }
 
 .topbar {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 10px;
   background: #222;
   color: white;
+  align-items: center;
 }
 
-button {
-  cursor: pointer;
+button, input {
+  padding: 6px;
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 10px;
   padding: 10px;
 }
@@ -32,14 +35,19 @@ button {
 .card {
   background: white;
   border-radius: 8px;
-  overflow: hidden;
-  padding: 10px;
+  padding: 8px;
+  position: relative;
+}
+
+.card.selected {
+  outline: 3px solid #4caf50;
 }
 
 .card img {
   width: 100%;
-  height: 120px;
+  height: 130px;
   object-fit: cover;
+  border-radius: 4px;
 }
 
 .tags {
@@ -54,73 +62,247 @@ button {
   font-size: 12px;
   border-radius: 4px;
 }
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: none;
+  justify-content: center;
+  align-items: center;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  width: 300px;
+  border-radius: 8px;
+}
 </style>
 </head>
+
 <body>
 
 <div class="topbar">
   <input type="file" id="fileInput">
   <button onclick="exportData()">Export</button>
-  <button onclick="addEntry()">Add Entry</button>
+  <button onclick="openModal()">Add Entry</button>
+
+  <button onclick="selectAll()">Select All</button>
+  <button onclick="clearSelection()">Clear</button>
+
+  <button onclick="bulkAddTag()">Add Tag</button>
+  <button onclick="bulkRemoveTag()">Remove Tag</button>
+  <button onclick="bulkDelete()">Delete</button>
+
+  <input placeholder="Search..." oninput="search(this.value)">
+  
+  <span>Selected: <strong id="selectedCount">0</strong></span>
 </div>
 
 <div id="grid" class="grid"></div>
 
+<!-- Modal -->
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <h3 id="modalTitle">Add Entry</h3>
+
+    <input id="title" placeholder="Title"><br><br>
+    <input id="url" placeholder="URL"><br><br>
+    <input id="thumb" placeholder="Thumbnail URL"><br><br>
+    <input id="tags" placeholder="Tags (comma separated)"><br><br>
+
+    <button onclick="saveEntry()">Save</button>
+    <button onclick="closeModal()">Cancel</button>
+  </div>
+</div>
+
 <script>
 let entries = [];
+let filtered = [];
+let selected = new Set();
+let editingId = null;
 
-// Generate unique ID
+// UTIL
 function uid() {
   return Date.now().toString();
 }
 
-// Render grid
+// RENDER
 function render() {
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
 
-  entries.forEach(entry => {
+  document.getElementById("selectedCount").textContent = selected.size;
+
+  filtered.forEach(entry => {
     const card = document.createElement("div");
-    card.className = "card";
+    card.className = "card " + (selected.has(entry.id) ? "selected" : "");
 
     card.innerHTML = `
+      <input type="checkbox" ${selected.has(entry.id) ? "checked" : ""} 
+        onchange="toggleSelect('${entry.id}')">
+
       <a href="${entry.url}" target="_blank">
-        <img src="${entry.thumbnail}" />
+        <img src="${entry.thumbnail}">
         <h4>${entry.title}</h4>
       </a>
+
       <div class="tags">
         ${entry.tags.map(t => `<span class="tag">${t}</span>`).join("")}
       </div>
+
+      <button onclick="editEntry('${entry.id}')">Edit</button>
     `;
 
     grid.appendChild(card);
   });
 }
 
-// Load file
+// SEARCH
+function search(q) {
+  q = q.toLowerCase();
+
+  filtered = entries.filter(e =>
+    e.title.toLowerCase().includes(q) ||
+    e.url.toLowerCase().includes(q) ||
+    e.tags.some(t => t.toLowerCase().includes(q))
+  );
+
+  render();
+}
+
+// SELECT
+function toggleSelect(id) {
+  selected.has(id) ? selected.delete(id) : selected.add(id);
+  render();
+}
+
+function selectAll() {
+  filtered.forEach(e => selected.add(e.id));
+  render();
+}
+
+function clearSelection() {
+  selected.clear();
+  render();
+}
+
+// BULK
+function bulkDelete() {
+  if (!confirm("Delete selected?")) return;
+  entries = entries.filter(e => !selected.has(e.id));
+  selected.clear();
+  filtered = entries;
+  render();
+}
+
+function bulkAddTag() {
+  const tag = prompt("Tag:");
+  if (!tag) return;
+
+  entries.forEach(e => {
+    if (selected.has(e.id) && !e.tags.includes(tag)) {
+      e.tags.push(tag);
+    }
+  });
+
+  render();
+}
+
+function bulkRemoveTag() {
+  const tag = prompt("Tag:");
+  if (!tag) return;
+
+  entries.forEach(e => {
+    if (selected.has(e.id)) {
+      e.tags = e.tags.filter(t => t !== tag);
+    }
+  });
+
+  render();
+}
+
+// MODAL
+function openModal(edit = false) {
+  document.getElementById("modal").style.display = "flex";
+  document.getElementById("modalTitle").textContent = edit ? "Edit Entry" : "Add Entry";
+}
+
+function closeModal() {
+  document.getElementById("modal").style.display = "none";
+  editingId = null;
+}
+
+function saveEntry() {
+  const title = document.getElementById("title").value;
+  const url = document.getElementById("url").value;
+  const thumb = document.getElementById("thumb").value;
+  const tags = document.getElementById("tags").value.split(",").map(t => t.trim()).filter(Boolean);
+
+  if (!title || !url) return;
+
+  if (editingId) {
+    const e = entries.find(e => e.id === editingId);
+    e.title = title;
+    e.url = url;
+    e.thumbnail = thumb;
+    e.tags = tags;
+  } else {
+    entries.push({
+      id: uid(),
+      title,
+      url,
+      thumbnail: thumb,
+      tags
+    });
+  }
+
+  filtered = entries;
+  closeModal();
+  render();
+}
+
+// EDIT
+function editEntry(id) {
+  const e = entries.find(e => e.id === id);
+
+  document.getElementById("title").value = e.title;
+  document.getElementById("url").value = e.url;
+  document.getElementById("thumb").value = e.thumbnail;
+  document.getElementById("tags").value = e.tags.join(", ");
+
+  editingId = id;
+  openModal(true);
+}
+
+// FILE
 document.getElementById("fileInput").addEventListener("change", e => {
-  const file = e.target.files[0];
   const reader = new FileReader();
 
-  reader.onload = function(evt) {
+  reader.onload = evt => {
     try {
       const data = JSON.parse(evt.target.result);
       entries = data.entries || [];
+      filtered = entries;
+      selected.clear();
       render();
     } catch {
       alert("Invalid file");
     }
   };
 
-  reader.readAsText(file);
+  reader.readAsText(e.target.files[0]);
 });
 
-// Export file
+// EXPORT
 function exportData() {
-  const blob = new Blob(
-    [JSON.stringify({ entries }, null, 2)],
-    { type: "application/json" }
-  );
+  const blob = new Blob([JSON.stringify({ entries }, null, 2)], {
+    type: "application/json"
+  });
 
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -128,25 +310,8 @@ function exportData() {
   a.click();
 }
 
-// Add entry
-function addEntry() {
-  const title = prompt("Title:");
-  const url = prompt("URL:");
-  const thumbnail = prompt("Thumbnail URL:");
-  const tags = prompt("Tags (comma separated):");
-
-  if (!title || !url) return;
-
-  entries.push({
-    id: uid(),
-    title,
-    url,
-    thumbnail,
-    tags: tags ? tags.split(",").map(t => t.trim()) : []
-  });
-
-  render();
-}
+// INIT
+filtered = entries;
 </script>
 
 </body>
