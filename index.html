@@ -5,12 +5,17 @@
 <title>Bookmark Manager</title>
 
 <style>
+* {
+  box-sizing: border-box;
+}
+
 body {
   font-family: Arial, sans-serif;
   margin: 0;
   background: #f4f4f4;
 }
 
+/* TOP BAR */
 .topbar {
   display: flex;
   flex-wrap: wrap;
@@ -21,22 +26,55 @@ body {
   align-items: center;
 }
 
-button, input {
-  padding: 6px;
+.topbar input[type="file"] {
+  max-width: 180px;
 }
 
+.topbar input[type="text"] {
+  flex: 1;
+  min-width: 120px;
+}
+
+button {
+  padding: 6px 10px;
+  border: none;
+  background: #444;
+  color: white;
+  border-radius: 4px;
+}
+
+button:hover {
+  background: #666;
+}
+
+/* GRID */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px;
 }
 
+/* Responsive columns */
+@media (min-width: 1200px) {
+  .grid { grid-template-columns: repeat(5, 1fr); }
+}
+@media (min-width: 900px) and (max-width: 1199px) {
+  .grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 600px) and (max-width: 899px) {
+  .grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 599px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* CARD */
 .card {
   background: white;
   border-radius: 8px;
   padding: 8px;
-  position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .card.selected {
@@ -45,24 +83,36 @@ button, input {
 
 .card img {
   width: 100%;
-  height: 130px;
+  height: 140px;
   object-fit: cover;
   border-radius: 4px;
 }
 
+.card h4 {
+  margin: 8px 0 4px;
+  font-size: 14px;
+}
+
+.card a {
+  text-decoration: none;
+  color: black;
+}
+
+/* TAGS */
 .tags {
-  margin-top: 5px;
+  margin-top: auto;
 }
 
 .tag {
   display: inline-block;
   background: #ddd;
-  padding: 2px 6px;
+  padding: 3px 6px;
   margin: 2px;
-  font-size: 12px;
+  font-size: 11px;
   border-radius: 4px;
 }
 
+/* MODAL */
 .modal {
   position: fixed;
   top: 0;
@@ -73,13 +123,33 @@ button, input {
   display: none;
   justify-content: center;
   align-items: center;
+  padding: 10px;
 }
 
 .modal-content {
   background: white;
   padding: 20px;
-  width: 300px;
+  width: 100%;
+  max-width: 400px;
   border-radius: 8px;
+}
+
+.modal-content input {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 6px;
+}
+
+/* SMALL SCREEN TWEAKS */
+@media (max-width: 500px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  button {
+    width: 100%;
+  }
 }
 </style>
 </head>
@@ -89,7 +159,7 @@ button, input {
 <div class="topbar">
   <input type="file" id="fileInput">
   <button onclick="exportData()">Export</button>
-  <button onclick="openModal()">Add Entry</button>
+  <button onclick="openModal()">Add</button>
 
   <button onclick="selectAll()">Select All</button>
   <button onclick="clearSelection()">Clear</button>
@@ -98,22 +168,22 @@ button, input {
   <button onclick="bulkRemoveTag()">Remove Tag</button>
   <button onclick="bulkDelete()">Delete</button>
 
-  <input placeholder="Search..." oninput="search(this.value)">
-  
+  <input type="text" placeholder="Search..." oninput="search(this.value)">
+
   <span>Selected: <strong id="selectedCount">0</strong></span>
 </div>
 
 <div id="grid" class="grid"></div>
 
-<!-- Modal -->
+<!-- MODAL -->
 <div id="modal" class="modal">
   <div class="modal-content">
     <h3 id="modalTitle">Add Entry</h3>
 
-    <input id="title" placeholder="Title"><br><br>
-    <input id="url" placeholder="URL"><br><br>
-    <input id="thumb" placeholder="Thumbnail URL"><br><br>
-    <input id="tags" placeholder="Tags (comma separated)"><br><br>
+    <input id="title" placeholder="Title">
+    <input id="url" placeholder="URL">
+    <input id="thumb" placeholder="Thumbnail URL">
+    <input id="tags" placeholder="Tags (comma separated)">
 
     <button onclick="saveEntry()">Save</button>
     <button onclick="closeModal()">Cancel</button>
@@ -126,16 +196,13 @@ let filtered = [];
 let selected = new Set();
 let editingId = null;
 
-// UTIL
 function uid() {
   return Date.now().toString();
 }
 
-// RENDER
 function render() {
   const grid = document.getElementById("grid");
   grid.innerHTML = "";
-
   document.getElementById("selectedCount").textContent = selected.size;
 
   filtered.forEach(entry => {
@@ -162,7 +229,6 @@ function render() {
   });
 }
 
-// SEARCH
 function search(q) {
   q = q.toLowerCase();
 
@@ -175,7 +241,6 @@ function search(q) {
   render();
 }
 
-// SELECT
 function toggleSelect(id) {
   selected.has(id) ? selected.delete(id) : selected.add(id);
   render();
@@ -191,7 +256,6 @@ function clearSelection() {
   render();
 }
 
-// BULK
 function bulkDelete() {
   if (!confirm("Delete selected?")) return;
   entries = entries.filter(e => !selected.has(e.id));
@@ -226,7 +290,6 @@ function bulkRemoveTag() {
   render();
 }
 
-// MODAL
 function openModal(edit = false) {
   document.getElementById("modal").style.display = "flex";
   document.getElementById("modalTitle").textContent = edit ? "Edit Entry" : "Add Entry";
@@ -266,7 +329,6 @@ function saveEntry() {
   render();
 }
 
-// EDIT
 function editEntry(id) {
   const e = entries.find(e => e.id === id);
 
@@ -279,7 +341,6 @@ function editEntry(id) {
   openModal(true);
 }
 
-// FILE
 document.getElementById("fileInput").addEventListener("change", e => {
   const reader = new FileReader();
 
@@ -298,7 +359,6 @@ document.getElementById("fileInput").addEventListener("change", e => {
   reader.readAsText(e.target.files[0]);
 });
 
-// EXPORT
 function exportData() {
   const blob = new Blob([JSON.stringify({ entries }, null, 2)], {
     type: "application/json"
@@ -310,7 +370,6 @@ function exportData() {
   a.click();
 }
 
-// INIT
 filtered = entries;
 </script>
 
